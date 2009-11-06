@@ -1,7 +1,7 @@
 /*  File BufMgr,java */
- 
+
 package bufmgr;
- 
+
 import diskmgr.Page;
 import exceptions.BufMgrException;
 import exceptions.BufferPoolExceededException;
@@ -24,11 +24,10 @@ import global.SystemDefs;
 import java.io.IOException;
 import java.util.Hashtable;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
- 
+
 // *****************************************************
- 
+
 /**
  * This is a dummy buffer manager class. You will need to replace it with a
  * buffer manager that reads from and writes to disk
@@ -40,14 +39,13 @@ public class BufMgr extends AbstractBufMgr {
 	public static final String Clock = "Clock";
 	public static final String LRU = "LRU";
 	public static final String MRU = "MRU";
- 
+
 	// Total number of buffer frames in the buffer pool. */
 	private int numBuffers;
 	private Map<PageId, BufMgrFrameDesc> pageTable = new Hashtable<PageId, BufMgrFrameDesc>();
 	private byte[][] buffer;
 	private BufMgrFrameDesc[] frameTable;
-	private List<Integer> emptyList;
- 
+
 	/**
 	 * Create a buffer manager object.
 	 * 
@@ -62,9 +60,9 @@ public class BufMgr extends AbstractBufMgr {
 		numBuffers = numbufs;
 		setReplacer(replacerArg);
 		init();
-		((BufMgrReplacer)replacer).setBufferManager(this);
+		((BufMgrReplacer) replacer).setBufferManager(this);
 	}
- 
+
 	private void init() {
 		buffer = new byte[numBuffers][MINIBASE_PAGESIZE];
 		frameTable = new BufMgrFrameDesc[numBuffers];
@@ -72,7 +70,7 @@ public class BufMgr extends AbstractBufMgr {
 			buffer[i] = new byte[MINIBASE_PAGESIZE];
 		}
 	}
- 
+
 	/**
 	 * Default Constructor Create a buffer manager object.
 	 * 
@@ -83,7 +81,7 @@ public class BufMgr extends AbstractBufMgr {
 		replacer = new Clock(this);
 		init();
 	}
- 
+
 	/**
 	 * Check if this page is in buffer pool, otherwise find a frame for this
 	 * page, read in and pin it. Also write out the old page if it's dirty
@@ -116,13 +114,13 @@ public class BufMgr extends AbstractBufMgr {
 	 * @exception IOException
 	 *                if there is other kinds of I/O error.
 	 */
- 
+
 	public void pinPage(PageId pageId, Page page, boolean emptyPage)
 			throws ReplacerException, HashOperationException,
 			PageUnpinnedException, InvalidFrameNumberException,
 			PageNotReadException, BufferPoolExceededException,
 			PagePinnedException, BufMgrException, IOException {
- 
+
 		BufMgrFrameDesc frame = pageTable.get(pageId);
 		byte[] frameData;
 		if (frame != null) {
@@ -130,48 +128,38 @@ public class BufMgr extends AbstractBufMgr {
 			returnPageInfo(page, frame);
 		} else {
 			// page has to be loaded
- 
-				// we need a victim frame
-				int victimFrameNo;
-				try
-				{
-					victimFrameNo = replacer.pick_victim();
+
+			// we need a victim frame
+			int victimFrameNo;
+
+			victimFrameNo = replacer.pick_victim();
+
+			BufMgrFrameDesc victimFrame = frameTable[victimFrameNo];
+
+			if (victimFrame != null && victimFrame.isDirty()) {
+				try {
+					flushPage(victimFrame.getPageNo());
+				} catch (PageNotFoundException e) {
+					throw new BufMgrException(e,
+							"BufrMgr::pinPage: page number not found in flushPage");
 				}
-				catch(BufferPoolExceededException e)
-				{
-					throw new BufferPoolExceededException(null,"BufMgr::pinPage pick_victim failed");
-				}
- 
-				BufMgrFrameDesc victimFrame = frameTable[victimFrameNo];
- 
- 
- 
-				if (victimFrame!=null && victimFrame.isDirty()) {
-					try {
-						flushPage(victimFrame.getPageNo());
-					} catch (PageNotFoundException e) {
-						throw new BufMgrException(e,
-								"BufrMgr::pinPage: page number not found in flushPage");
-					}
-				}
- 
-				frameData = buffer[victimFrameNo];
- 
-				frameTable[victimFrameNo] = new BufMgrFrameDesc(pageId,
-				frameData, victimFrameNo);
- 
-				frame = frameTable[victimFrameNo];
- 
-				// delete the entry from pageTable
- 
-				if(victimFrame!=null)
-				{
-					pageTable.remove(victimFrame.getPageNo());
-				}
-				createPageTableEntry(pageId, page, emptyPage, frame);
+			}
+
+			frameData = buffer[victimFrameNo];
+
+			frameTable[victimFrameNo] = new BufMgrFrameDesc(pageId, frameData,
+					victimFrameNo);
+
+			frame = frameTable[victimFrameNo];
+
+			// delete the entry from pageTable
+			if (victimFrame != null) {
+				pageTable.remove(victimFrame.getPageNo());
+			}
+			createPageTableEntry(pageId, page, emptyPage, frame);
 		}
 	}
- 
+
 	private void createPageTableEntry(PageId pageId, Page page,
 			boolean emptyPage, BufMgrFrameDesc frame)
 			throws InvalidFrameNumberException, PageNotReadException {
@@ -179,7 +167,7 @@ public class BufMgr extends AbstractBufMgr {
 		loadPageFromDisk(pageId, page, emptyPage);
 		pageTable.put(new PageId(pageId.getPid()), frame);
 	}
- 
+
 	private void loadPageFromDisk(PageId pageId, Page page, boolean empty)
 			throws PageNotReadException {
 		if (!empty) {
@@ -191,14 +179,14 @@ public class BufMgr extends AbstractBufMgr {
 			}
 		}
 	}
- 
+
 	private void returnPageInfo(Page page, BufMgrFrameDesc frame)
 			throws InvalidFrameNumberException {
 		frame.pin();
 		replacer.pin(frame.getFrameNumber());
 		page.setpage(frame.getData());
 	}
- 
+
 	/**
 	 * To unpin a page specified by a pageId. If pincount>0, decrement it and if
 	 * it becomes zero, put it in a group of replacement candidates. if
@@ -221,9 +209,9 @@ public class BufMgr extends AbstractBufMgr {
 	public void unpinPage(PageId pageId, boolean dirty)
 			throws ReplacerException, PageUnpinnedException,
 			HashEntryNotFoundException, InvalidFrameNumberException {
- 
+
 		BufMgrFrameDesc frame = pageTable.get(pageId);
- 
+
 		if (frame != null) {
 			int pinCount = frame.getPinCount();
 			if (pinCount == 0) {
@@ -234,14 +222,14 @@ public class BufMgr extends AbstractBufMgr {
 				if (frame.getPinCount() == 0)
 					replacer.unpin(frame.getFrameNumber());
 			}
- 
+
 			frame.setDirtybit(dirty);
 		} else {
 			throw new HashEntryNotFoundException(null,
 					"BufrMgr::unPinPage: page to be unpinned not loaded");
 		}
 	}
- 
+
 	/**
 	 * Call DB object to allocate a run of new pages and find a frame in the
 	 * buffer pool for the first page and pin it. If buffer is full, ask DB to
@@ -282,32 +270,32 @@ public class BufMgr extends AbstractBufMgr {
 			InvalidFrameNumberException, PagePinnedException,
 			PageUnpinnedException, PageNotReadException, BufMgrException,
 			DiskMgrException, IOException {
- 
+
 		PageId newPageId = new PageId();
- 
+
 		try {
 			SystemDefs.JavabaseDB.allocate_page(newPageId, howmany);
 		} catch (Exception e) {
 			throw new DiskMgrException(e,
 					"BUFMGR::newPage() failed during allocating disk page");
 		}
- 
+
 		try {
 			pinPage(newPageId, firstpage, true);
 		} catch (Exception e) {
 			try {
 				SystemDefs.JavabaseDB.deallocate_page(newPageId, howmany);
 			} catch (Exception e1) {
-				throw new DiskMgrException(e, "BUFMGR::newPage() failed " +
-						"after pinPage failed and deallocate page failed");
+				throw new DiskMgrException(e, "BUFMGR::newPage() failed "
+						+ "after pinPage failed and deallocate page failed");
 			}
 			throw new DiskMgrException(e,
 					"BUFMGR::newPage() failed during pinPage");
 		}
- 
+
 		return newPageId;
 	}
- 
+
 	/**
 	 * User should call this method if s/he needs to delete a page. this routine
 	 * will call DB to deallocate the page.
@@ -345,38 +333,37 @@ public class BufMgr extends AbstractBufMgr {
 			BufferPoolExceededException, PagePinnedException,
 			PageUnpinnedException, HashEntryNotFoundException, BufMgrException,
 			DiskMgrException, IOException {
- 
+
 		BufMgrFrameDesc frame = pageTable.get(pageId);
- 
+
 		if (frame != null) {
 			int pinCount = frame.getPinCount();
- 
+
 			if (pinCount > 1) {
 				throw new PagePinnedException(null,
 						"BufrMgr::freePage: page to be freed not loaded");
 			} else {
-				if(pinCount==1)
-				{
+				if (pinCount == 1) {
 					frame.unpin();
 					replacer.unpin(frame.getFrameNumber());
 				}
 				// remove from pagetable/frametable
 				pageTable.remove(pageId);
- 
+
 				// add it to empty list
 				frameTable[frame.getFrameNumber()] = null;
 				replacer.free(frame.getFrameNumber());
- 
+
 				// free it on disk
 				try {
 					SystemDefs.JavabaseDB.deallocate_page(pageId);
 				} catch (Exception e1) {
-					throw new DiskMgrException(e1, "BUFMGR::freepage failed " +
-							"after pinPage failed and deallocate page failed");
+					throw new DiskMgrException(e1, "BUFMGR::freepage failed "
+							+ "after pinPage failed and deallocate page failed");
 				}
- 
+
 			}
- 
+
 		} else {
 			// free it on disk
 			try {
@@ -386,7 +373,7 @@ public class BufMgr extends AbstractBufMgr {
 			}
 		}
 	}
- 
+
 	/**
 	 * Added to flush a particular page of the buffer pool to disk
 	 * 
@@ -409,33 +396,33 @@ public class BufMgr extends AbstractBufMgr {
 	public void flushPage(PageId pageId) throws HashOperationException,
 			PageUnpinnedException, PagePinnedException, PageNotFoundException,
 			BufMgrException, IOException {
- 
+
 		BufMgrFrameDesc frame = pageTable.get(pageId);
- 
+
 		if (frame != null) {
 			if (frame.isDirty()) {
 				try {
-					SystemDefs.JavabaseDB.write_page(pageId, new Page(frame.getData()));
+					SystemDefs.JavabaseDB.write_page(pageId, new Page(frame
+							.getData()));
 				} catch (Exception e) {
 					throw new BufMgrException(e,
-						"BufrMgr::flushPage: page cant be freed by diskmanager");
+							"BufrMgr::flushPage: page cant be freed by diskmanager");
 				}
 			}
- 
+
 			frame.setDirtybit(false);
- 
-			if(frame.getPinCount()>0)
-			{
+
+			if (frame.getPinCount() > 0) {
 				throw new PagePinnedException(null,
-					"BufrMgr::flushPage: page is still pinned");
+						"BufrMgr::flushPage: page is still pinned");
 			}
- 
+
 		} else {
 			throw new PageNotFoundException(null,
-				"BufrMgr::flushPage: page to be flushed not loaded");
+					"BufrMgr::flushPage: page to be flushed not loaded");
 		}
 	}
- 
+
 	/**
 	 * Flushes all pages of the buffer pool to disk
 	 * 
@@ -455,13 +442,14 @@ public class BufMgr extends AbstractBufMgr {
 	public void flushAllPages() throws HashOperationException,
 			PageUnpinnedException, PagePinnedException, PageNotFoundException,
 			BufMgrException, IOException {
- 
-		for (Iterator<PageId> iterator = pageTable.keySet().iterator(); iterator.hasNext();) {
+
+		for (Iterator<PageId> iterator = pageTable.keySet().iterator(); iterator
+				.hasNext();) {
 			PageId pageId = (PageId) iterator.next();
 			flushPage(pageId);
 		}
 	}
- 
+
 	/**
 	 * Gets the total number of buffers.
 	 * 
@@ -470,7 +458,7 @@ public class BufMgr extends AbstractBufMgr {
 	public int getNumBuffers() {
 		return numBuffers;
 	}
- 
+
 	/**
 	 * Gets the total number of unpinned buffer frames.
 	 * 
@@ -488,10 +476,10 @@ public class BufMgr extends AbstractBufMgr {
 		}
 		return unpinned;
 	}
- 
+
 	/** A few routines currently need direct access to the FrameTable. */
 	public AbstractBufMgrFrameDesc[] getFrameTable() {
 		return this.frameTable;
 	}
- 
+
 }

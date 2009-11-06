@@ -1,31 +1,30 @@
 package bufmgr;
- 
+
 import exceptions.BufferPoolExceededException;
 import exceptions.InvalidFrameNumberException;
 import exceptions.PagePinnedException;
 import exceptions.PageUnpinnedException;
 import global.AbstractBufMgr;
- 
+
 import java.util.LinkedList;
 import java.util.List;
- 
+
 /**
  * This class should implement a Clock replacement strategy.
  */
 public class MRU extends BufMgrReplacer {
- 
+
 	List<Integer> emptyList = new LinkedList<Integer>();
 	List<Integer> evictionList = new LinkedList<Integer>();
-	boolean is_init=false;
- 
+	boolean is_init = false;
+
 	public MRU() {
- 
 	}
- 
+
 	public MRU(AbstractBufMgr b) {
 		setBufferManager(b);
 	}
- 
+
 	/**
 	 * Pins a candidate page in the buffer pool.
 	 * 
@@ -37,28 +36,28 @@ public class MRU extends BufMgrReplacer {
 	 * @return true if successful.
 	 */
 	public void pin(int frameNo) throws InvalidFrameNumberException {
- 
-		if(!is_init)
-		{
-			init_MRU();
-		}
- 
+
+		init();
+
 		// find the frame and remove it
 		if (frameNo < 0 || frameNo > mgr.getNumBuffers()) {
 			throw new InvalidFrameNumberException(null,
 					"MRU::pin Invalid frame Number");
 		}
-		//No need to remove from anyList bcoz
+		// No need to remove from anyList bcoz
 		// this function is called from PinPage
-		//if Page already exists in buffer then buffer is not in any list
-		//else if a victim is chosen ..then buffer is removed from the appropriate list 
-		//in the pick_victim function
-		if(this.state_bit[frameNo]==Available)
-		{
-			this.state_bit[frameNo]=Pinned;
+		// if Page already exists in buffer then buffer is not in any list
+		// else if a victim is chosen ..then buffer is removed from the
+		// appropriate list
+		// in the pick_victim function
+		if (this.state_bit[frameNo] == Available) {
+			emptyList.remove(new Integer(frameNo));
+		} else if(this.state_bit[frameNo] == Referenced) {
+			evictionList.remove(new Integer(frameNo));
 		}
+		this.state_bit[frameNo] = Pinned;
 	}
- 
+
 	/**
 	 * Unpins a page in the buffer pool.
 	 * 
@@ -73,26 +72,22 @@ public class MRU extends BufMgrReplacer {
 	 */
 	public boolean unpin(int frameNo) throws InvalidFrameNumberException,
 			PageUnpinnedException {
- 
-		if(!is_init)
-		{
-			init_MRU();
-		}
- 
+
+		init();
+
 		// find the frame and remove it
 		if (frameNo < 0 || frameNo > mgr.getNumBuffers()) {
 			throw new InvalidFrameNumberException(null,
 					"MRU::pin Invalid frame Number");
 		}
- 
-		if(this.state_bit[frameNo]==Pinned)
-		{
-			this.state_bit[frameNo]=Referenced;
+
+		if (this.state_bit[frameNo] == Pinned) {
+			this.state_bit[frameNo] = Referenced;
 			evictionList.add(0, new Integer(frameNo));
 		}
 		return true;
 	}
- 
+
 	/**
 	 * Frees and unpins a page in the buffer pool.
 	 * 
@@ -102,79 +97,57 @@ public class MRU extends BufMgrReplacer {
 	 *             if the page is pinned.
 	 */
 	public void free(int frameNo) throws PagePinnedException {
- 
- 
-		if(!is_init)
-		{
-			init_MRU();
-		}
-		if(this.state_bit[frameNo]==Referenced) //Page must be already in the evictionList
-		{
+
+		init();
+
+		// Page must be already in the evictionList
+		if (this.state_bit[frameNo] == Referenced) {
 			evictionList.remove(new Integer(frameNo));
-			emptyList.add(0, new Integer(frameNo));
 		}
-		else if(this.state_bit[frameNo]==Pinned) 
-		{
-			emptyList.add(0, new Integer(frameNo));
-		}
-		else
-		{
-			System.err.print("trying to free a free which..something wrong..No proper error checking");
-		}
-		this.state_bit[frameNo]=Available;
+		
+		emptyList.add(0, new Integer(frameNo));
+		this.state_bit[frameNo] = Available;
 	}
- 
+
 	/** Must pin the returned frame. */
 	public int pick_victim() throws BufferPoolExceededException,
 			PagePinnedException {
- 
+
 		int victim;
- 
-		if(!is_init)
-		{
-			init_MRU();
-		}
- 
-		if(emptyList.size()>0)
-		{
-			victim=emptyList.remove(0).intValue();
-		}
-		else if(evictionList.size()>0)
-		{
-			victim=evictionList.remove(0).intValue();
-		}
-		else
-		{
+		init();
+
+		if (emptyList.size() > 0) {
+			victim = emptyList.remove(0).intValue();
+		} else if (evictionList.size() > 0) {
+			victim = evictionList.remove(0).intValue();
+		} else {
 			throw new BufferPoolExceededException(null,
-			"MRU:pic_victim buffer pool exceeded");
+					"MRU:pic_victim buffer pool exceeded");
 		}
-		return (victim);
+		return victim;
 	}
- 
+
 	/** Retruns the name of the replacer algorithm. */
 	public String name() {
-		if(!is_init)
-		{
-			init_MRU();
-		}
+		init();
 		return "MRU";
 	}
- 
+
 	/**
 	 * Counts the unpinned frames (free frames) in the buffer pool.
 	 * 
 	 * @returns the total number of unpinned frames in the buffer pool.
 	 */
 	public int getNumUnpinnedBuffers() {
-		return (evictionList.size()+emptyList.size());
+		return (evictionList.size() + emptyList.size());
 	}
- 
-	public void init_MRU()
-	{
- 
-		for (int i = 0; i < mgr.getNumBuffers(); i++) {
-			emptyList.add(new Integer(i));
+
+	public void init() {
+		if (!is_init) {
+			for (int i = 0; i < mgr.getNumBuffers(); i++) {
+				emptyList.add(new Integer(i));
+			}
+			is_init = true;
 		}
-		is_init=true;
 	}
 }
