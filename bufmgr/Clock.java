@@ -67,10 +67,13 @@ public class Clock extends BufMgrReplacer {
 					"CLOCK::pin Invalid frame Number");
 		}
 
-		removeFromEvictionList(frameNo);
-
-		evictionList.add(new Integer(frameNo));
-		evictionFlag.add(new Boolean(true));
+		int index = evictionList.indexOf(new Integer(frameNo));
+		if (index > 0) {
+			evictionFlag.set(index, new Boolean(true));
+		} else {
+			evictionList.add(new Integer(frameNo));
+			evictionFlag.add(new Boolean(true));
+		}
 		return true;
 	}
 
